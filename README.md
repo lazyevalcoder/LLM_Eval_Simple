@@ -84,6 +84,7 @@ Useful `run` flags:
 --id tc-01,dbg-03      run exact task ids
 --limit N              take the first N selected tasks
 --attempts N           edit-mode repair attempts (default: 2)
+--min-output-budget N  raise edit/agent max_tokens to at least N (reasoning mode)
 --timeout SECONDS      per-request timeout (default: 900)
 --temperature F        override the sampler temperature
 --top-p F              override top_p
@@ -114,6 +115,19 @@ The sampler is pinned to temperature 1.0, top_p 0.95, top_k 20, min_p 0.0 so bot
 models are compared under the same conditions. Tool-call tasks disable thinking
 (`chat_template_kwargs: {"enable_thinking": false}`) because the task is the call
 itself, not a long chain of thought. Edit and terminal tasks leave thinking enabled.
+
+### Running with reasoning enabled
+
+Thinking tokens count against each task's `max_tokens`. If the server runs with
+reasoning on, cap the thinking and raise the output budgets:
+
+```powershell
+llama serve ... --no-reasoning-preserve --reasoning-effort medium --reasoning-budget 1024
+python bench.py run --label dense --preset quick --min-output-budget 4096 --attempts 2 --verbose
+```
+
+Use the same reasoning flags for both models. Without the reasoning budget, a small
+model can spend the whole task budget thinking and never emit the fix.
 
 ## Task categories
 

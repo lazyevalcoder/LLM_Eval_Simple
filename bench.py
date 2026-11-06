@@ -57,6 +57,10 @@ DEFAULT_SAMPLER = {
 # (which exposes /v1/models and loads instances on demand) needs the exact id.
 MODEL_NAME = "local"
 
+# Raise the per-task max_tokens for edit/agent modes when the server has
+# reasoning enabled. Set with --min-output-budget.
+MIN_OUTPUT_BUDGET = 0
+
 EDIT_SYSTEM = """You are a senior software engineer working inside a repository.
 
 Reply with the COMPLETE contents of every file you create or change, using exactly this format:
@@ -238,6 +242,7 @@ def mode_edit(task, base, sampler, timeout, attempts, workdir: Path, log):
     messages.append({"role": "user", "content": user})
 
     test_cmd = task.get("test_cmd") or [sys.executable, "tests.py"]
+    budget = max(task.get("max_tokens", 1400), MIN_OUTPUT_BUDGET)
     ptok = ctok = 0
     trace = []
     last_out = ""
@@ -246,7 +251,7 @@ def mode_edit(task, base, sampler, timeout, attempts, workdir: Path, log):
 
     for attempt in range(1, attempts + 1):
         used = attempt
-        msg, usage, dt = ask(base, messages, task.get("max_tokens", 1400), sampler, timeout)
+        msg, usage, dt = ask(base, messages, budget, sampler, timeout)
         ptok += int(usage.get("prompt_tokens") or 0)
         ctok += int(usage.get("completion_tokens") or 0)
         content = msg.get("content") or ""
@@ -549,10 +554,11 @@ def mode_agent(task, base, sampler, timeout, attempts, workdir: Path, log):
     ptok = ctok = 0
     trace = []
     max_steps = task.get("max_steps", 10)
+    budget = max(task.get("max_tokens", 700), MIN_OUTPUT_BUDGET)
     finished = False
 
     for step in range(1, max_steps + 1):
-        msg, usage, _ = ask(base, messages, task.get("max_tokens", 700), sampler, timeout,
+        msg, usage, _ = ask(base, messages, budget, sampler, timeout,
                             tools=tools, extra=extra)
         ptok += int(usage.get("prompt_tokens") or 0)
         ctok += int(usage.get("completion_tokens") or 0)
@@ -624,8 +630,9 @@ def select(tasks, args):
 
 
 def run(args):
-    global MODEL_NAME
+    global MODEL_NAME, MIN_OUTPUT_BUDGET
     MODEL_NAME = args.model
+    MIN_OUTPUT_BUDGET = args.min_output_budget
     tasks = select(load_tasks(), args)
     if not tasks:
         print("no tasks selected")
@@ -647,6 +654,8 @@ def run(args):
     print(f"label          : {args.label}")
     print(f"tasks          : {len(tasks)}")
     print(f"sampler        : {sampler}")
+    if MIN_OUTPUT_BUDGET:
+        print(f"min output tok : {MIN_OUTPUT_BUDGET}")
     print("-" * 78)
 
     rows = []
@@ -697,6 +706,7 @@ def run(args):
         "endpoint": api_base(args.base_url),
         "sampler": sampler,
         "attempts": args.attempts,
+        "min_output_budget": args.min_output_budget,
         "preset": args.preset,
         "wall_s": round(wall_total, 1),
         "decode_tps": decode_tps,
@@ -877,6 +887,8 @@ def main(argv=None):
     common(r)
     r.add_argument("--label", default="run")
     r.add_argument("--attempts", type=int, default=2)
+    r.add_argument("--min-output-budget", type=int, default=0,
+                   help="raise edit/agent max_tokens to at least N (use when reasoning is on)")
     r.add_argument("--timeout", type=float, default=900)
     r.add_argument("--temperature", type=float, default=None)
     r.add_argument("--top-p", type=float, default=None)
