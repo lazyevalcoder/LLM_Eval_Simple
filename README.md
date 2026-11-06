@@ -171,6 +171,39 @@ harness runs `verify.py`. Test files are read-only to the agent.
 confined to the workspace. This is a safety net, not a sandbox: run the suite on a
 disposable machine/account if you do not trust the model.
 
+## Scope: how this compares to SWE-bench
+
+This suite borrows the SWE-bench *workflow* (issue/spec → edit a repo → run tests →
+retry) but is deliberately much smaller, dependency-free, and calibrated for
+7B–35B local models.
+
+| | this suite | SWE-bench Verified |
+| --- | --- | --- |
+| tasks | 34 | 500 |
+| repo size | a handful of files, stdlib only | real projects, full dependency stacks |
+| tests | visible; they are the spec | hidden FAIL_TO_PASS / PASS_TO_PASS |
+| output | whole files | unified diff patch |
+| environment | plain Python, no Docker | per-repo Docker images |
+| runtime | 30–60 min | hours to days |
+| measures | relative local-model skill | absolute issue-resolution rate |
+
+Consequences:
+
+- Do **not** compare the pass percentage here to published SWE-bench numbers.
+  They measure different things at different difficulty.
+- 34 tasks give a wide confidence interval (about ±17 points at a 50% score).
+  Use `--preset full` and repeat runs before treating small differences as real.
+- SWE-bench is hard enough that small quantized models often score near zero,
+  which gives no signal. This suite deliberately avoids that floor effect so
+  you can see differences between models in your class.
+- The tests are shown to the model on purpose: the task is "satisfy this spec",
+  not "infer a hidden spec from a bug report". SWE-bench grades against hidden
+  tests and is therefore a harder, different skill.
+
+For a recognized absolute number, run SWE-bench Verified with its Docker
+harness. For a no-Docker middle ground, Aider Polyglot or DebugBench are closer
+to public-benchmark conditions, though still much larger than this suite.
+
 ## Adding your own tasks
 
 Append a dict to the relevant module in `tasks/`. The common fields are:
